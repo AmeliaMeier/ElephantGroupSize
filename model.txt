@@ -1,0 +1,94 @@
+
+    model{
+    ### priors and constraints
+    ## Detection Model
+    mu.focal ~ dunif(0, 10)
+    sigma.focal ~ dunif(0, 100)
+    tau.focal <- 1/(sigma.focal*sigma.focal)
+    
+    for (f in 1:n.focals){
+       p.alpha[f]~dnorm(mu.focal, tau.focal)
+    }
+    
+    # Site
+    p.site ~ dnorm(0, 0.01)
+    
+    ## GroupSize
+    psi <- sum(lam[])/M
+    
+    # alpha
+    alpha~ dnorm(0, 0.01)
+    
+    # intercept prior for sex(fixed)
+    b.sex~dnorm(0, 0.01)
+    
+    # intercept prior for fruit
+    b.fruit ~ dnorm(0, 0.01)
+    
+    # evi 
+    b.evi ~ dnorm(0, 0.01)
+    
+    # distance to water
+    b.wat ~ dnorm(0, 0.01)
+    
+    #hfi prior
+    b.hfi ~ dnorm(0, 0.01)
+    
+    # ppt prior
+    b.ppt ~dnorm(0, 0.01)
+    
+
+    ### abundance model
+    for(s in 1:S){
+    log(lam[s])<- alpha + b.sex*sex[s] + b.fruit*fruit[s] + b.hfi*hfi[s] + b.evi*evi[s] + b.wat*distWat[s] + b.ppt*ppt[s] 
+    gprobs[s] <- lam[s]/sum(lam[1:S])
+    }
+    
+    ### likelihood
+    for(i in 1:M){
+    g[i] ~ dcat(gprobs[])
+    z[i] ~ dbern(psi)
+    logit(p[i]) <- p.alpha[focal[g[i]]] + p.site*site[g[i]] 
+    y[i] ~ dbin(mu[i], K[i]) # K[i] allows to account for different number of segments
+    mu[i] <- z[i]*p[i]
+    e[i]<- (y[i]^0.5-p[i]*K[i])^2
+    resid[i]<- (y[i]- p[i]*K[i])*z[i]
+ 
+    y.new[i] ~ dbin(mu[i], K[i])
+    g.new[i] ~ dcat(gprobs[])
+    z.new[i] ~ dbern(psi)
+    e.new[i] <- ((y.new[i])^0.5- p[i]*K[i])^2  # Freeman Tukey 
+    resid.new[i]<- (y.new[i]- p[i]*K[i])*z[i]
+    }
+
+    #### derived quantities
+    e.sum<- sum(e[])
+    e.sum.new<- sum(e.new[])
+
+    N <- sum(z[1:M])
+    N.new<- sum(z.new[1:M])
+
+    for(i in 1:M){
+      group.out[i] <- g[i]*z[i]
+      group.out.new[i]<- g.new[i]*z.new[i]
+  
+      #This will allow us to count the number of individuals in each replicate
+      for(j in 1:S){
+        g.N[j,i] <- step(0.01*(j-group.out[i])-0.02*(j-group.out[i])*(j-group.out[i])+0.001)
+        g.N.new[j,i] <- step(0.01*(j-group.out.new[i])-0.02*(j-group.out.new[i])*(j-group.out.new[i])+0.001)
+        }
+      }
+
+    for(j in 1:S){
+      G.N[j]<- sum(g.N[j,])
+      G.N.new[j]<- sum(g.N.new[j,])
+  
+      ge[j]<- ((G.N[j] - exp(lam[j]))/exp(lam[j]))^2 # chi square test
+      ge.new[j]<- ((G.N.new[j] - exp(lam[j]))/exp(lam[j]))^2 # chi square test
+    }
+    
+    ge.sum<- sum(ge[])
+    ge.sum.new<- sum(ge.new[])
+    
+    }
+    
